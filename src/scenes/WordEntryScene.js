@@ -1,4 +1,4 @@
-import { gameState } from '../game.js';
+import { gameState, saveGameState } from '../game.js';
 import { LETTER_CONFIG } from '../config/letterConfig.js';
 import { WORD_DICT, getRandomWord, isValidWord } from '../config/wordDict.js';
 import { Starfield } from '../effects/Starfield.js';
@@ -21,9 +21,6 @@ export class WordEntryScene extends Phaser.Scene {
         if (!gameState.opponentWord) {
             gameState.opponentWord = getRandomWord();
         }
-
-        // Display current gold
-        this.goldText = this.add.bitmapText(width / 2, 350, this.font, `Gold: ${gameState.gold}`, this.fontSize).setOrigin(0.5, 0);
 
         // Display level indicator (top right)
         this.levelText = this.add.bitmapText(width / 2, 20, this.font, `Level: ${gameState.level}`, this.fontSize).setOrigin(0.5, 0);
@@ -76,7 +73,7 @@ export class WordEntryScene extends Phaser.Scene {
             window.focusInvisibleInput();
         }
 
-        const slotsY = height / 2;
+        const slotsY = height / 2 - 30;
         this.enterWordTitle = this.add.bitmapText(
         width / 2,
         slotsY - 60,
@@ -120,6 +117,9 @@ export class WordEntryScene extends Phaser.Scene {
         // Listen for keyboard input
         this.input.keyboard.on('keydown', this.handleWordInput, this);
 
+        // Display current gold
+        this.goldText = this.add.bitmapText(width / 2, slotsY + 30, this.font, `Gold: ${gameState.gold}`, this.fontSize).setOrigin(0.5, 0);
+
         // Add Quit button (top right, below level)
         // this.quitButton = this.add.bitmapText(width / 2, height - 60, this.font, 'Give up', this.fontSize)
         //     .setOrigin(0.5, 0)
@@ -144,6 +144,7 @@ export class WordEntryScene extends Phaser.Scene {
             this.scene.pause();
             this.scene.get('MenuScene').scene.isOverlay = true;
             this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
+            saveGameState();
         });
     }
 
@@ -205,6 +206,11 @@ export class WordEntryScene extends Phaser.Scene {
             if (totalCost <= gameState.gold) {
                 gameState.currentWord = word.toLowerCase();
                 gameState.gold -= totalCost;
+                saveGameState();
+                // Blur invisible input
+                if (window.blurInvisibleInput) {
+                    window.blurInvisibleInput();
+                }                        
                 // Fade to black for 700ms before starting battle
                 this.cameras.main.fadeOut(700, 0, 0, 0);
                 this.cameras.main.once('camerafadeoutcomplete', () => {
@@ -255,13 +261,16 @@ export class WordEntryScene extends Phaser.Scene {
                     }
                 }
                 if (totalCost <= gameState.gold) {
-                    gameState.currentWord = word;
+                    gameState.currentWord = word.toLowerCase();
                     gameState.gold -= totalCost;
-                    // Fade to black for 300ms before starting battle
-                    this.cameras.main.fadeOut(300, 0, 0, 0);
+                    saveGameState();
+                    // Fade to black for 700ms before starting battle
+                    this.cameras.main.fadeOut(700, 0, 0, 0);
                     this.cameras.main.once('camerafadeoutcomplete', () => {
                         this.scene.start('BattleScene');
                     });
+                } else {
+                    this.validationText.setText('Not enough gold!');
                 }
             }
         }

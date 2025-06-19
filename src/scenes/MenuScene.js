@@ -1,4 +1,4 @@
-import { gameState } from '../game.js';
+import { gameState, saveGameState } from '../game.js';
 import { Starfield } from '../effects/Starfield.js';
 
 export class MenuScene extends Phaser.Scene {
@@ -12,13 +12,7 @@ export class MenuScene extends Phaser.Scene {
     create() {
         this.starfield = new Starfield(this);
         const { width, height } = this.cameras.main;
-        // // Add semi-opaque background if overlay
-        // if (this.scene.isOverlay) {
-        //     const bg = this.add.graphics();
-        //     bg.fillStyle(0x000000, 1.0);
-        //     bg.fillRect(0, 0, width, height);
-        //     bg.setDepth(-1); // ensure it's behind menu UI
-        // }
+
         // Wavy 'wardle' title as individual letters
         this.gameTitleLetters = [];
         const word = 'wardle';
@@ -49,6 +43,7 @@ export class MenuScene extends Phaser.Scene {
                     this.scene.setVisible(true, this.scene.resumeTarget);
                     this.scene.resume(this.scene.resumeTarget);
                 }
+                saveGameState();
                 this.scene.stop('MenuScene');
             });
             // Restart button
@@ -72,9 +67,8 @@ export class MenuScene extends Phaser.Scene {
                 // Fade to black before restarting
                 this.cameras.main.fadeOut(700, 0, 0, 0);
                 this.cameras.main.once('camerafadeoutcomplete', () => {
+                    saveGameState();
                     this.scene.stop('MenuScene');
-                    // this.scene.stop('BattleScene');
-                    // this.scene.stop('WordEntryScene');
                     this.scene.start('WordEntryScene');
                 });
             });
@@ -88,10 +82,11 @@ export class MenuScene extends Phaser.Scene {
             });
         }
         // Set muted to default
+        this.sound.volume = gameState.volume;
         this.sound.mute = gameState.isMuted;
 
         // Add sound toggle
-        const soundButton = this.add.bitmapText(width / 2, height / 2 + 200, 'nokia16', 'Sound: OFF', 24)
+        const soundButton = this.add.bitmapText(width / 2, height / 2 + 200, 'nokia16', `Sound: ${gameState.isMuted ? 'OFF' : 'ON'}`, 24)
             .setOrigin(0.5)
             .setInteractive();
 
@@ -99,6 +94,7 @@ export class MenuScene extends Phaser.Scene {
             gameState.isMuted = !gameState.isMuted;
             soundButton.setText(`Sound: ${gameState.isMuted ? 'OFF' : 'ON'}`);
             this.sound.mute = gameState.isMuted;
+            saveGameState();
         });
 
         // Add volume slider (20 blocks)
@@ -117,6 +113,10 @@ export class MenuScene extends Phaser.Scene {
                 .setInteractive();
             block.blockIndex = i;
             block.on('pointerdown', () => {
+                gameState.isMuted = false;
+                this.sound.mute = gameState.isMuted;
+                soundButton.setText(`Sound: ${gameState.isMuted ? 'OFF' : 'ON'}`);
+
                 this.setVolume(i / (blockCount - 1));
             });
             this.volumeBlocks.push(block);
@@ -128,6 +128,10 @@ export class MenuScene extends Phaser.Scene {
         if (!this.sound.get('bgm')) {
             this.sound.add('bgm', { loop: true, volume: 0.50 }).play();
         }
+
+        // Show version in bottom right
+        const version = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+        this.add.bitmapText(width / 2, height - 20, 'nokia16', `v${version}`, 16).setOrigin(0.5, 0);
     }
 
     setVolume(value) {
@@ -142,6 +146,7 @@ export class MenuScene extends Phaser.Scene {
         gameState.volume = logVolume;
         this.sound.volume = logVolume;
         this.updateVolumeBlocks();
+        saveGameState();
     }
 
     updateVolumeBlocks() {

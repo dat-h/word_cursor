@@ -1,4 +1,10 @@
 import { defineConfig } from 'vite';
+import { execSync } from 'child_process';
+
+let commitHash = 'dev';
+try {
+  commitHash = execSync('git rev-parse --short HEAD').toString().trim();
+} catch (e) {}
 
 export default defineConfig({
 //   root: './',
@@ -12,5 +18,8 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true
-  }
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(commitHash),
+  },
 }); 

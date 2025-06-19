@@ -59,11 +59,56 @@ loadWordDict().then(() => {
 });
 
 // Game state
+export const GAME_SAVE_KEY = 'wardleSave';
+export const GAME_SAVE_VERSION = 1;
+
 export const gameState = {
     gold: 10,
     level: 1,
     currentWord: '',
     opponentWord: '',
     survivingLetters: [],
-    isMuted: true
-}; 
+    isMuted: true, // Muted by default
+    volumeLevel: 1,
+    volume: 0,
+    version: GAME_SAVE_VERSION,
+    lastScene: 'MenuScene',
+};
+
+export function saveGameState() {
+    try {
+        const saveData = {
+            // gold: gameState.gold,
+            // level: gameState.level,
+            // currentWord: gameState.currentWord,
+            // opponentWord: gameState.opponentWord,
+            // survivingLetters: gameState.survivingLetters,
+            isMuted: gameState.isMuted,
+            volumeLevel: gameState.volumeLevel,
+            volume: gameState.volume,
+            version: GAME_SAVE_VERSION,
+            // lastScene: gameState.lastScene,
+        };
+        localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(saveData));
+    } catch (e) {
+        // ignore
+    }
+}
+
+export function loadGameState() {
+    try {
+        const data = localStorage.getItem(GAME_SAVE_KEY);
+        if (!data) return;
+        const saveData = JSON.parse(data);
+        if (saveData.version !== GAME_SAVE_VERSION) return; // skip incompatible saves
+        Object.assign(gameState, saveData);
+    } catch (e) {
+        // ignore
+    }
+}
+
+// Load state on game start
+loadGameState();
+
+// Save on page unload
+window.addEventListener('beforeunload', saveGameState); 

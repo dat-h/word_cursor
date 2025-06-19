@@ -1,9 +1,9 @@
 export const LETTER_CONFIG = {
     // Vowels (cost: 2 gold)
     'a': { health: 2, damage: 2, cost: 2, type: 'vowel' },
-    'e': { health: 2, damage: 2, cost: 2, type: 'vowel' },
+    'e': { health: 2, damage: 2, cost: 3, type: 'vowel' },
     'i': { health: 2, damage: 2, cost: 2, type: 'vowel' },
-    'o': { health: 2, damage: 2, cost: 2, type: 'vowel' },
+    'o': { health: 1, damage: 2, cost: 0, type: 'vowel' },
     'u': { health: 2, damage: 2, cost: 2, type: 'vowel' },
     
     // Consonants (cost: 1 gold)

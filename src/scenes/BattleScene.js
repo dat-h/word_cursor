@@ -1,4 +1,4 @@
-import { gameState } from '../game.js';
+import { gameState, saveGameState } from '../game.js';
 import { LETTER_CONFIG } from '../config/letterConfig.js';
 import { Starfield } from '../effects/Starfield.js';
 import { getRandomWord } from '../config/wordDict.js';
@@ -14,6 +14,12 @@ export class BattleScene extends Phaser.Scene {
 
     create() {
         this.starfield = new Starfield(this);
+
+        // Blur invisible input
+        if (window.blurInvisibleInput) {
+            window.blurInvisibleInput();
+        }
+        
         this.playerLetters = [];
         this.opponentLetters = [];
         this.currentTurn = 'player'; // or 'opponent'
@@ -37,6 +43,7 @@ export class BattleScene extends Phaser.Scene {
             this.scene.pause();
             this.scene.get('MenuScene').scene.isOverlay = true;
             this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
+            saveGameState();
         });
 
         // Start battle
@@ -441,47 +448,58 @@ export class BattleScene extends Phaser.Scene {
         const opponentAlive = this.opponentLetters.some(letter => letter.sprite.active);
 
         if (!playerAlive) {
+            saveGameState();
             this.scene.start('GameOverScene');
         } else if (!opponentAlive) {
             // Player wins
             gameState.level++;
             gameState.gold += 1; // Reward for winning
-            
             // Refund surviving letters
             this.playerLetters.forEach(letter => {
                 if (letter.sprite.active) {
                     gameState.gold += LETTER_CONFIG[letter.letter].cost;
                 }
             });
-
             // Choose a new random opponent word for the next round
             gameState.opponentWord = getRandomWord();
-
-            // Check for level 10 celebration
-            if (gameState.level % 10 === 0) {
+            saveGameState();
+            // Show fireworks and delay scene switch
+            if (gameState.level % 1 === 0) {
                 this.createFireworks();
+                this.sound.play('win');
+                this.time.delayedCall(2500, () => {
+                    this.scene.start('WordEntryScene');
+                });
+            } else {
+                this.scene.start('WordEntryScene');
             }
-
-            this.scene.start('WordEntryScene');
         }
     }
 
     createFireworks() {
-        // Create fireworks effect
-        const particles = this.add.particles('nokia16');
-        
+        const { width, height } = this.cameras.main;
+
         for (let i = 0; i < 5; i++) {
-            const x = Phaser.Math.Between(100, 700);
-            const y = Phaser.Math.Between(100, 500);
-            
-            particles.createEmitter({
-                x: x,
-                y: y,
-                speed: { min: 50, max: 100 },
-                scale: { start: 0.5, end: 0 },
-                lifespan: 1000,
-                quantity: 20,
-                frequency: 100
+            const x = Phaser.Math.Between(10, width - 10);
+            const y = Phaser.Math.Between(10, height - 10);
+            const frameList = [
+                ['green', 'blue'],
+                ['yellow', 'red'],
+                ['green'],
+                ['blue', 'white'], 
+                ['green', 'blue', 'yellow', 'red']
+            ]
+            this.time.delayedCall(i * 350, () => {
+                const emitter = this.add.particles(x, y, 'flares', {
+                    frame: frameList[i],
+                    lifespan: 600,
+                    speed: { min: 150, max: 250 },
+                    scale: { start: 0.3, end: 0 },
+                    gravityY: 150,
+                    blendMode: 'ADD',
+                    emitting: false
+                });
+                emitter.explode(35);
             });
         }
     }
