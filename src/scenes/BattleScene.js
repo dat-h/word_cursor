@@ -26,6 +26,19 @@ export class BattleScene extends Phaser.Scene {
         // Create opponent letters
         this.createLetters(gameState.opponentWord, false);
 
+        // Add global menu button (top right)
+        const width = this.cameras.main.width;
+        const menuButton = this.add.bitmapText(0, 0, 'nokia16', '=', 48)
+            .setOrigin(0, 0)
+            .setInteractive();
+        menuButton.on('pointerdown', () => {
+            this.scene.setVisible(false, this.scene.key);
+            this.scene.launch('MenuScene');
+            this.scene.pause();
+            this.scene.get('MenuScene').scene.isOverlay = true;
+            this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
+        });
+
         // Start battle
         this.time.delayedCall(1000, this.startBattle, [], this);
     }

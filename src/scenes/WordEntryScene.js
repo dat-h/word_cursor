@@ -23,10 +23,10 @@ export class WordEntryScene extends Phaser.Scene {
         }
 
         // Display current gold
-        this.goldText = this.add.bitmapText(20, 20, this.font, `Gold: ${gameState.gold}`, this.fontSize).setOrigin(0, 0);
+        this.goldText = this.add.bitmapText(width / 2, 350, this.font, `Gold: ${gameState.gold}`, this.fontSize).setOrigin(0.5, 0);
 
         // Display level indicator (top right)
-        this.levelText = this.add.bitmapText(width - 20, 20, this.font, `Level: ${gameState.level}`, this.fontSize).setOrigin(1, 0);
+        this.levelText = this.add.bitmapText(width / 2, 20, this.font, `Level: ${gameState.level}`, this.fontSize).setOrigin(0.5, 0);
 
         // Display opponent word
         const topY = 80;
@@ -34,7 +34,7 @@ export class WordEntryScene extends Phaser.Scene {
             width / 2,
             topY,
             this.font,
-            'Opponent word:',
+            'opponent word:',
             this.fontSize
         ).setOrigin(0.5, 0);
 
@@ -121,17 +121,29 @@ export class WordEntryScene extends Phaser.Scene {
         this.input.keyboard.on('keydown', this.handleWordInput, this);
 
         // Add Quit button (top right, below level)
-        this.quitButton = this.add.bitmapText(width / 2, height - 60, this.font, 'Quit', this.fontSize)
-            .setOrigin(0.5, 0)
+        // this.quitButton = this.add.bitmapText(width / 2, height - 60, this.font, 'Give up', this.fontSize)
+        //     .setOrigin(0.5, 0)
+        //     .setInteractive();
+        // this.quitButton.on('pointerdown', () => {
+        //     // Reset game state
+        //     gameState.gold = 10;
+        //     gameState.level = 1;
+        //     gameState.currentWord = '';
+        //     gameState.opponentWord = '';
+        //     gameState.survivingLetters = [];
+        //     this.scene.start('MenuScene');
+        // });
+
+        // Add global menu button (top right)
+        const menuButton = this.add.bitmapText(0, 0, this.font, '=', 48)
+            .setOrigin(0, 0)
             .setInteractive();
-        this.quitButton.on('pointerdown', () => {
-            // Reset game state
-            gameState.gold = 10;
-            gameState.level = 1;
-            gameState.currentWord = '';
-            gameState.opponentWord = '';
-            gameState.survivingLetters = [];
-            this.scene.start('MenuScene');
+        menuButton.on('pointerdown', () => {
+            this.scene.setVisible(false, this.scene.key);
+            this.scene.launch('MenuScene');
+            this.scene.pause();
+            this.scene.get('MenuScene').scene.isOverlay = true;
+            this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
         });
     }
 

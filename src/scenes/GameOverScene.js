@@ -28,7 +28,7 @@ export class GameOverScene extends Phaser.Scene {
             gameState.opponentWord = '';
             gameState.survivingLetters = [];
             
-            this.scene.start('MenuScene');
+            this.scene.start('WordEntryScene');
         });
     }
 
