@@ -1,6 +1,6 @@
 import { gameState, saveGameState } from '../game.js';
 import { LETTER_CONFIG } from '../config/letterConfig.js';
-import { WORD_DICT, getRandomWord, isValidWord } from '../config/wordDict.js';
+import { WORD_DICT, getRandomWord, isValidWord, getRandomWordFromLettersWithPriority } from '../config/wordDict.js';
 import { Starfield } from '../effects/Starfield.js';
 
 export class WordEntryScene extends Phaser.Scene {
@@ -19,20 +19,26 @@ export class WordEntryScene extends Phaser.Scene {
 
         // Set opponent word if not already set
         if (!gameState.opponentWord) {
-            gameState.opponentWord = getRandomWord();
+            // gameState.opponentWord = getRandomWord();
+            // Choose a new random opponent word for the next round, prioritizing new letters
+            gameState.opponentWord = getRandomWordFromLettersWithPriority(
+                gameState.opponentAvailableLetters,
+                gameState.opponentPriorityLetters || []
+            );
+
         }
 
         // Display level indicator (top right)
-        this.levelText = this.add.bitmapText(width / 2, 20, this.font, `Level: ${gameState.level}`, this.fontSize).setOrigin(0.5, 0);
+        this.levelText = this.add.bitmapText(width / 2, 10, this.font, `Level: ${gameState.level}`, 24).setOrigin(0.5, 0);
 
         // Display opponent word
-        const topY = 60;
+        const topY = 35;
         this.opponentTextLabel = this.add.bitmapText(
             width / 2,
             topY,
             this.font,
             'opponent word:',
-            this.fontSize
+            24
         ).setOrigin(0.5, 0);
 
         // this.opponentText = this.add.bitmapText(
@@ -53,7 +59,7 @@ export class WordEntryScene extends Phaser.Scene {
         const gap = 4;
         const totalWidth = (letterWidth * word.length) + (gap * (word.length - 1));
         const startOpponentX = width / 2 - totalWidth / 2 + letterWidth / 2;
-        const baseY = topY + 80;
+        const baseY = topY + 70;
 
         for (let i = 0; i < word.length; i++) {
             const letter = word[i];
@@ -90,7 +96,7 @@ export class WordEntryScene extends Phaser.Scene {
             window.focusInvisibleInput();
         }
 
-        const slotsY = height / 2 - 30;
+        const slotsY = height / 2 - 60;
         // this.enterWordTitle = this.add.bitmapText(
         // width / 2,
         // slotsY - 60,
@@ -158,7 +164,7 @@ export class WordEntryScene extends Phaser.Scene {
         this.input.keyboard.on('keydown', this.handleWordInput, this);
 
         // Display current gold
-        this.goldText = this.add.bitmapText(width / 2, slotsY + 60, this.font, `Funds: $${gameState.gold}`, 24).setOrigin(0.5, 0);
+        this.goldText = this.add.bitmapText(width / 2, slotsY + 80, this.font, `Funds: $${gameState.gold}`, 24).setOrigin(0.5, 0);
 
         // Add global menu button (top right)
         const menuButton = this.add.bitmapText(0, 0, this.font, '=', 48)
@@ -172,16 +178,80 @@ export class WordEntryScene extends Phaser.Scene {
             this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
             saveGameState();
         });
+        this.availableLettersLabel = this.add.bitmapText(width/2, slotsY + 40, this.font, 'Available Letters', 16).setOrigin(0.5);
+
+        // --- Available Letters Setup ---
+        if (!gameState.availableLetters) {
+            const baseLetters = ['r', 's', 't', 'l', 'n', 'e'];
+            const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+            const availablePool = alphabet.filter(l => !baseLetters.includes(l));
+            Phaser.Utils.Array.Shuffle(availablePool);
+            const randomLetters = availablePool.slice(0, 3);
+            gameState.availableLetters = baseLetters.concat(randomLetters).sort();
+            saveGameState();
+        }
+        this.availableLetters = gameState.availableLetters;
+
+        // Display available letters as buttons below the letter slots
+        this.letterButtons = [];
+        const buttonSpacing = 25;
+        const buttonY = slotsY + 60;
+        const startXButtons = this.cameras.main.width / 2 - (buttonSpacing * 4);
+        this.availableLetters.forEach((letter, i) => {
+            const btn = this.add.bitmapText(startXButtons + i * buttonSpacing, buttonY, this.font, letter, 20)
+                .setOrigin(0.5);
+            // Convert to display-only (remove interactive properties)
+            this.letterButtons.push(btn);
+        });
+
+        // Add QWERTY keyboard for available letters
+        this.createQWERTYKeyboard();
+    }
+
+    createQWERTYKeyboard() {
+        const { height } = this.cameras.main;
+        const slotsY = height / 2 - 100;
+
+        const qwertyLayout = [
+            ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+            ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+            ['z', 'x', 'c', 'v', 'b', 'n', 'm']
+        ];
+        
+        const keySize = 30;
+        const keySpacing = 4;
+        const keyboardY = slotsY + 170; // Position below existing letter display
+        this.keyboardKeys = [];
+
+        qwertyLayout.forEach((row, rowIndex) => {
+            const rowWidth = row.length * (keySize + keySpacing) - keySpacing;
+            const startX = this.cameras.main.width / 2 - rowWidth / 2;
+            
+            row.forEach((letter, colIndex) => {
+                // Only create keys for available letters
+                if (this.availableLetters.includes(letter)) {
+                    const x = startX + colIndex * (keySize + keySpacing) + keySize / 2;
+                    const y = keyboardY + rowIndex * (keySize + keySpacing) + keySize / 2;
+                    
+                    const key = this.add.bitmapText(x, y, this.font, letter, 24)
+                        .setOrigin(0.5)
+                        .setInteractive();
+                    
+                    key.on('pointerdown', () => this.handleLetterButton(letter));
+                    this.keyboardKeys.push(key);
+                }
+            });
+        });
     }
 
     handleWordInput(event) {
         if (!this.letterSlots) return;
-        const key = event.key;
+        const key = event.key.toLowerCase();
         let totalCost = 0;
         this.validationText.setText('');
 
-        if (/^[a-zA-Z]$/.test(key) && this.enteredWord.length < 5) {
-            let word = this.enteredWord + key.toLowerCase();
+        if (/^[a-z]$/.test(key) && this.enteredWord.length < 5 && this.availableLetters.includes(key)) {
+            let word = this.enteredWord + key;
 
             // Calculate cost of current word
             for (let letter of word) {
@@ -196,8 +266,8 @@ export class WordEntryScene extends Phaser.Scene {
             }
             // Update gold display
             this.goldText.setText(`Funds: $${gameState.gold - totalCost}`);
-            this.enteredWord += key.toLowerCase();
-            this.letterSlots[this.enteredWord.length - 1].setText(key.toLowerCase());
+            this.enteredWord += key;
+            this.letterSlots[this.enteredWord.length - 1].setText(key);
 
             // Update letter slots and health bars
             for (let i = 0; i < 5; i++) {
@@ -241,7 +311,7 @@ export class WordEntryScene extends Phaser.Scene {
             // } else {
             //     this.starfield.showComet(false);
             // }
-        } else if (key === 'Backspace' && this.enteredWord.length > 0) {
+        } else if (key === 'backspace' && this.enteredWord.length > 0) {
             this.letterSlots[this.enteredWord.length - 1].setText('_');
             this.enteredWord = this.enteredWord.slice(0, -1);
 
@@ -450,6 +520,15 @@ export class WordEntryScene extends Phaser.Scene {
                     l.healthBar.y = l.y - l.baseY;
                 }
             });
+        }
+    }
+
+    // Add handler for letter button clicks
+    handleLetterButton(letter) {
+        if (this.enteredWord.length < 5) {
+            // Simulate the same logic as valid keyboard input
+            let event = { key: letter };
+            this.handleWordInput(event);
         }
     }
 } 

@@ -57,6 +57,9 @@ export class MenuScene extends Phaser.Scene {
                 gameState.currentWord = '';
                 gameState.opponentWord = '';
                 gameState.survivingLetters = [];
+                gameState.availableLetters = null;
+                gameState.opponentAvailableLetters = ['r', 's', 't', 'l', 'n', 'e', 'o'];
+                gameState.opponentPriorityLetters = [ 'o'];
                 if (this.scene.resumeTarget) {
                     this.scene.setVisible(true, this.scene.resumeTarget);
                 }

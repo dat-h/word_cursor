@@ -1,7 +1,7 @@
 import { gameState, saveGameState } from '../game.js';
 import { LETTER_CONFIG } from '../config/letterConfig.js';
 import { Starfield } from '../effects/Starfield.js';
-import { getRandomWord } from '../config/wordDict.js';
+import { getRandomWordFromLettersWithPriority } from '../config/wordDict.js';
 
 export class BattleScene extends Phaser.Scene {
     constructor() {
@@ -434,7 +434,7 @@ export class BattleScene extends Phaser.Scene {
             targets: floatingText,
             y: y - 30,
             alpha: 0,
-            duration: 700,
+            duration: 1200,
             ease: 'Cubic.easeOut',
             onComplete: () => floatingText.destroy()
         });
@@ -457,8 +457,27 @@ export class BattleScene extends Phaser.Scene {
                     gameState.gold += LETTER_CONFIG[letter.letter].cost;
                 }
             });
-            // Choose a new random opponent word for the next round
-            gameState.opponentWord = getRandomWord();
+            // Add a new random letter to opponentAvailableLetters and update priority
+            const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+            const current = gameState.opponentAvailableLetters || [];
+            const availablePool = alphabet.filter(l => !current.includes(l));
+            let newLetter = null;
+            if (availablePool.length > 0) {
+                Phaser.Utils.Array.Shuffle(availablePool);
+                newLetter = availablePool[0];
+                gameState.opponentAvailableLetters.push(newLetter);
+                // Update priority: keep only last two new letters
+                if (!gameState.opponentPriorityLetters) gameState.opponentPriorityLetters = [];
+                gameState.opponentPriorityLetters.push(newLetter);
+                if (gameState.opponentPriorityLetters.length > 2) {
+                    gameState.opponentPriorityLetters = gameState.opponentPriorityLetters.slice(-2);
+                }
+            }
+            // Choose a new random opponent word for the next round, prioritizing new letters
+            gameState.opponentWord = getRandomWordFromLettersWithPriority(
+                gameState.opponentAvailableLetters,
+                gameState.opponentPriorityLetters || []
+            );
             saveGameState();
             // Show fireworks and delay scene switch
             if (gameState.level % 1 === 0) {

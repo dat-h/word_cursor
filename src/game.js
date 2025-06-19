@@ -72,6 +72,8 @@ export const gameState = {
     volumeLevel: 1,
     volume: 0,
     version: GAME_SAVE_VERSION,
+    opponentAvailableLetters: ['r', 's', 't', 'l', 'n', 'e', 'o'],
+    opponentPriorityLetters: [ 'o'],
     lastScene: 'MenuScene',
 };
 

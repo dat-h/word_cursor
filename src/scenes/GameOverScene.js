@@ -27,7 +27,9 @@ export class GameOverScene extends Phaser.Scene {
             gameState.currentWord = '';
             gameState.opponentWord = '';
             gameState.survivingLetters = [];
-            
+            gameState.availableLetters = null;
+            gameState.opponentAvailableLetters = ['r', 's', 't', 'l', 'n', 'e', 'o'];
+            gameState.opponentPriorityLetters = [];
             this.scene.start('WordEntryScene');
         });
     }
