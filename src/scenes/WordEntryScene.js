@@ -170,12 +170,21 @@ export class WordEntryScene extends Phaser.Scene {
             }
             // Update gold display
             this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
-
             this.enteredWord += key.toLowerCase();
             this.letterSlots[this.enteredWord.length - 1].setText(key.toLowerCase());
         } else if (key === 'Backspace' && this.enteredWord.length > 0) {
             this.letterSlots[this.enteredWord.length - 1].setText('_');
             this.enteredWord = this.enteredWord.slice(0, -1);
+
+            // Update gold display
+            let word = this.enteredWord;
+            // Calculate cost of current word
+            for (let letter of word) {
+                if (LETTER_CONFIG[letter]) {
+                    totalCost += LETTER_CONFIG[letter].cost;
+                }
+            }            
+            this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
         } else if (key === 'Enter' && this.enteredWord.length === 5) {
             this.checkWordAndProceed();
         }

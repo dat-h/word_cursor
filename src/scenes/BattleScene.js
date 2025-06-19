@@ -153,12 +153,11 @@ export class BattleScene extends Phaser.Scene {
             return;
         }
 
-        // Process special abilities
-        if (letter.letter === 'e') {
-            // Create shield for neighboring letters
+        // New logic using tags:
+        const config = LETTER_CONFIG[letter.letter];
+        if (config.tags && config.tags.includes('shielding')) {
             this.createShield(letter);
-        } else if (LETTER_CONFIG[letter.letter].type === 'consonant') {
-            // Heal neighboring letters
+        } else if (config.tags && config.tags.includes('healing')) {
             this.healNeighbors(letter);
         }
 
@@ -196,10 +195,11 @@ export class BattleScene extends Phaser.Scene {
         }
         let targetIndex;
 
-        // Special targeting for X and Y
-        if (attackingLetter.letter === 'x') {
+        // New logic using tags:
+        const config = LETTER_CONFIG[attackingLetter.letter];
+        if (config.tags && config.tags.includes('special-targeting-x')) {
             targetIndex = 0;
-        } else if (attackingLetter.letter === 'y') {
+        } else if (config.tags && config.tags.includes('special-targeting-y')) {
             targetIndex = defender.length - 1;
         } else {
             targetIndex = this.currentActionIndex;
@@ -418,9 +418,6 @@ export class BattleScene extends Phaser.Scene {
                         });
                     }
                 });
-
-
-
 
             }
         });
