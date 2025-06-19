@@ -117,22 +117,25 @@ export class WordEntryScene extends Phaser.Scene {
             // Create empty health bar placeholder
             this.letterSlotHealthBars.push(null);
         }
-        // Add info text for last letter entered
-        this.lastLetterInfoText = this.add.bitmapText(
-            this.cameras.main.width / 2,
-            slotsY + 25,
-            this.font,
-            '',
-            16
-        ).setOrigin(0.5, 0);
-        // Add info text for last letter entered
-        this.lastLetterInfoText2 = this.add.bitmapText(
-            this.cameras.main.width / 2,
-            slotsY + 40,
-            this.font,
-            '',
-            16
-        ).setOrigin(0.5, 0);
+        // Add info card background and elements for last letter entered
+        const cardWidth = 200;
+        const cardHeight = 54;
+        const cardX = this.cameras.main.width / 2 - cardWidth / 2;
+        const cardY = slotsY - 90;
+        this.infoCard = this.add.graphics();
+        this.infoCard.fillStyle(0x222222, 0.85);
+        this.infoCard.fillRoundedRect(cardX, cardY, cardWidth, cardHeight, 8);
+        this.infoCard.lineStyle(2, 0xffffff, 1);
+        this.infoCard.strokeRoundedRect(cardX, cardY, cardWidth, cardHeight, 8);
+        this.infoCard.setVisible(false);
+        // Large letter
+        this.infoCardLetter = this.add.bitmapText(cardX + 20, cardY + cardHeight / 2, this.font, '', 24).setOrigin(0.5);
+        this.infoCardLetter.setVisible(false);
+        // Info texts
+        this.lastLetterInfoText = this.add.bitmapText(cardX + 50, cardY + 14, this.font, '', 16).setOrigin(0, 0.5);
+        this.lastLetterInfoText2 = this.add.bitmapText(cardX + 50, cardY + 36, this.font, '', 16).setOrigin(0, 0.5);
+        this.lastLetterInfoText.setVisible(false);
+        this.lastLetterInfoText2.setVisible(false);
 
         // Add invisible clickable box overlay over the letter slots
         const overlayWidth = slotSpacing * 5;
@@ -155,7 +158,7 @@ export class WordEntryScene extends Phaser.Scene {
         this.input.keyboard.on('keydown', this.handleWordInput, this);
 
         // Display current gold
-        this.goldText = this.add.bitmapText(width / 2, slotsY + 60, this.font, `Gold: ${gameState.gold}`, 24).setOrigin(0.5, 0);
+        this.goldText = this.add.bitmapText(width / 2, slotsY + 60, this.font, `Funds: $${gameState.gold}`, 24).setOrigin(0.5, 0);
 
         // Add global menu button (top right)
         const menuButton = this.add.bitmapText(0, 0, this.font, '=', 48)
@@ -192,7 +195,7 @@ export class WordEntryScene extends Phaser.Scene {
                 return;
             }
             // Update gold display
-            this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
+            this.goldText.setText(`Funds: $${gameState.gold - totalCost}`);
             this.enteredWord += key.toLowerCase();
             this.letterSlots[this.enteredWord.length - 1].setText(key.toLowerCase());
 
@@ -223,14 +226,21 @@ export class WordEntryScene extends Phaser.Scene {
                     }
                     this.letterSlotHealthBars[i] = healthBar;
                     const tags = config.tags && config.tags.length ? `${config.tags.join(', ')}` : '';
-                    this.lastLetterInfoText.setText(
-                        `DMG: ${config.damage}  Cost: ${config.cost}`
-                    );
-                    this.lastLetterInfoText2.setText(
-                        `${tags ? '  ' + tags : ''}`
-                    );
+                    this.infoCard.setVisible(true);
+                    this.infoCardLetter.setText(letter.toLowerCase());
+                    this.infoCardLetter.setVisible(true);
+                    this.lastLetterInfoText.setText(`ATK: ${config.damage}  Cost: $${config.cost}`);
+                    this.lastLetterInfoText2.setText(tags);
+                    this.lastLetterInfoText.setVisible(true);
+                    this.lastLetterInfoText2.setVisible(true);
                 }
             }
+            // // Show comet if two letters left
+            // if (this.enteredWord.length === 3) {
+            //     this.starfield.showComet(true);
+            // } else {
+            //     this.starfield.showComet(false);
+            // }
         } else if (key === 'Backspace' && this.enteredWord.length > 0) {
             this.letterSlots[this.enteredWord.length - 1].setText('_');
             this.enteredWord = this.enteredWord.slice(0, -1);
@@ -243,14 +253,22 @@ export class WordEntryScene extends Phaser.Scene {
                     totalCost += LETTER_CONFIG[letter].cost;
                 }
             }            
-            this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
+            this.goldText.setText(`Funds: $${gameState.gold - totalCost}`);
             const i = this.enteredWord.length;
             if (this.letterSlotHealthBars[i]) {
                 this.letterSlotHealthBars[i].destroy();
                 this.letterSlotHealthBars[i] = null;
             }
-            this.lastLetterInfoText.setText( '' );
-            this.lastLetterInfoText2.setText( '' );
+            this.infoCard.setVisible(false);
+            this.infoCardLetter.setVisible(false);
+            this.lastLetterInfoText.setVisible(false);
+            this.lastLetterInfoText2.setVisible(false);
+            // Show comet if two letters left
+            // if (this.enteredWord.length === 3) {
+            //     this.starfield.showComet(true);
+            // } else {
+            //     this.starfield.showComet(false);
+            // }
         } else if (key === 'Enter' && this.enteredWord.length === 5) {
             this.checkWordAndProceed();
         }
@@ -265,7 +283,7 @@ export class WordEntryScene extends Phaser.Scene {
         if (!isValidWord(word)) {
             // this.flashRedOverlay();
             this.validationText.setText('Not a valid word!');
-            this.goldText.setText(`Gold: ${gameState.gold}`);
+            this.goldText.setText(`Funds: $${gameState.gold}`);
             this.enteredWord = '';
             for (let i = 0; i < this.letterSlots.length; i++) {
                 this.letterSlots[i].setText('_');
@@ -347,20 +365,37 @@ export class WordEntryScene extends Phaser.Scene {
                 this.letterSlotHealthBars[i] = healthBar;
             }
         }
-        // Update last letter info text
+        // Show comet if two letters left
+        if (word.length === 2) {
+            this.starfield.showComet(true);
+        } else {
+            this.starfield.showComet(false);
+        }
+
+        // Update info card for last letter
         if (word.length > 0) {
             const lastLetter = word[word.length - 1];
             const config = LETTER_CONFIG[lastLetter];
             if (config) {
-                const tags = config.tags && config.tags.length ? `Tags: ${config.tags.join(', ')}` : '';
-                this.lastLetterInfoText.setText(
-                    `Letter: ${lastLetter.toUpperCase()}  Damage: ${config.damage}  Cost: ${config.cost}${tags ? '  ' + tags : ''}`
-                );
+                const tags = config.tags && config.tags.length ? `${config.tags.join(', ')}` : '';
+                this.infoCard.setVisible(true);
+                this.infoCardLetter.setText(lastLetter.toUpperCase());
+                this.infoCardLetter.setVisible(true);
+                this.lastLetterInfoText.setText(`atk: ${config.damage}  Cost: $${config.cost}`);
+                this.lastLetterInfoText2.setText(tags);
+                this.lastLetterInfoText.setVisible(true);
+                this.lastLetterInfoText2.setVisible(true);
             } else {
-                this.lastLetterInfoText.setText('');
+                this.infoCard.setVisible(false);
+                this.infoCardLetter.setVisible(false);
+                this.lastLetterInfoText.setVisible(false);
+                this.lastLetterInfoText2.setVisible(false);
             }
         } else {
-            this.lastLetterInfoText.setText('');
+            this.infoCard.setVisible(false);
+            this.infoCardLetter.setVisible(false);
+            this.lastLetterInfoText.setVisible(false);
+            this.lastLetterInfoText2.setVisible(false);
         }
     }
 
