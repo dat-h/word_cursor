@@ -26,7 +26,7 @@ export class WordEntryScene extends Phaser.Scene {
         this.levelText = this.add.bitmapText(width / 2, 20, this.font, `Level: ${gameState.level}`, this.fontSize).setOrigin(0.5, 0);
 
         // Display opponent word
-        const topY = 80;
+        const topY = 60;
         this.opponentTextLabel = this.add.bitmapText(
             width / 2,
             topY,
@@ -53,7 +53,7 @@ export class WordEntryScene extends Phaser.Scene {
         const gap = 4;
         const totalWidth = (letterWidth * word.length) + (gap * (word.length - 1));
         const startOpponentX = width / 2 - totalWidth / 2 + letterWidth / 2;
-        const baseY = topY + 50;
+        const baseY = topY + 80;
 
         for (let i = 0; i < word.length; i++) {
             const letter = word[i];
@@ -62,6 +62,23 @@ export class WordEntryScene extends Phaser.Scene {
             sprite.setScale(scale);
             sprite.baseY = baseY;
             sprite.waveIndex = i;
+            // Add health bar above each letter
+            const config = LETTER_CONFIG[letter];
+            const maxHealth = config ? config.health : 1;
+            const barWidth = 32;
+            const barHeight = 6;
+            const segmentGap = 2;
+            const segmentWidth = (barWidth - (maxHealth - 1) * segmentGap) / maxHealth;
+            const xStart = x - barWidth / 2;
+            const barBaseY = baseY - (sprite.displayHeight / 2) - 10;
+            const healthBar = this.add.graphics();
+            for (let j = 0; j < maxHealth; j++) {
+                healthBar.fillStyle(0x00ff00);
+                healthBar.fillRect(xStart + j * (segmentWidth + segmentGap), barBaseY, segmentWidth, barHeight);
+            }
+            // Store healthBar and its baseY for animation
+            sprite.healthBar = healthBar;
+            // sprite.healthBarBaseY = barBaseY;
             this.opponentLetters.push(sprite);
         }
 
@@ -74,29 +91,49 @@ export class WordEntryScene extends Phaser.Scene {
         }
 
         const slotsY = height / 2 - 30;
-        this.enterWordTitle = this.add.bitmapText(
-        width / 2,
-        slotsY - 60,
-        this.font,
-        'Enter word',
-        this.fontSize
-        ).setOrigin(0.5, 0);
+        // this.enterWordTitle = this.add.bitmapText(
+        // width / 2,
+        // slotsY - 60,
+        // this.font,
+        // 'Enter word',
+        // this.fontSize
+        // ).setOrigin(0.5, 0);
 
         // Display 5 underscores for the word slots
         this.enteredWord = '';
         this.letterSlots = [];
+        this.letterSlotHealthBars = [];
         const slotSpacing = 40;
         const startX = this.cameras.main.width / 2 - (slotSpacing * 2);
         for (let i = 0; i < 5; i++) {
-        const slot = this.add.bitmapText(
-            startX + i * slotSpacing,
-            slotsY,
-            this.font,
-            '_',
-            this.fontSize
-        ).setOrigin(0.5);
-        this.letterSlots.push(slot);
+            const slot = this.add.bitmapText(
+                startX + i * slotSpacing,
+                slotsY,
+                this.font,
+                '_',
+                this.fontSize
+            ).setOrigin(0.5);
+            this.letterSlots.push(slot);
+            // Create empty health bar placeholder
+            this.letterSlotHealthBars.push(null);
         }
+        // Add info text for last letter entered
+        this.lastLetterInfoText = this.add.bitmapText(
+            this.cameras.main.width / 2,
+            slotsY + 25,
+            this.font,
+            '',
+            16
+        ).setOrigin(0.5, 0);
+        // Add info text for last letter entered
+        this.lastLetterInfoText2 = this.add.bitmapText(
+            this.cameras.main.width / 2,
+            slotsY + 40,
+            this.font,
+            '',
+            16
+        ).setOrigin(0.5, 0);
+
         // Add invisible clickable box overlay over the letter slots
         const overlayWidth = slotSpacing * 5;
         const overlayHeight = this.fontSize + 16;
@@ -118,21 +155,7 @@ export class WordEntryScene extends Phaser.Scene {
         this.input.keyboard.on('keydown', this.handleWordInput, this);
 
         // Display current gold
-        this.goldText = this.add.bitmapText(width / 2, slotsY + 30, this.font, `Gold: ${gameState.gold}`, this.fontSize).setOrigin(0.5, 0);
-
-        // Add Quit button (top right, below level)
-        // this.quitButton = this.add.bitmapText(width / 2, height - 60, this.font, 'Give up', this.fontSize)
-        //     .setOrigin(0.5, 0)
-        //     .setInteractive();
-        // this.quitButton.on('pointerdown', () => {
-        //     // Reset game state
-        //     gameState.gold = 10;
-        //     gameState.level = 1;
-        //     gameState.currentWord = '';
-        //     gameState.opponentWord = '';
-        //     gameState.survivingLetters = [];
-        //     this.scene.start('MenuScene');
-        // });
+        this.goldText = this.add.bitmapText(width / 2, slotsY + 60, this.font, `Gold: ${gameState.gold}`, 24).setOrigin(0.5, 0);
 
         // Add global menu button (top right)
         const menuButton = this.add.bitmapText(0, 0, this.font, '=', 48)
@@ -172,6 +195,42 @@ export class WordEntryScene extends Phaser.Scene {
             this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
             this.enteredWord += key.toLowerCase();
             this.letterSlots[this.enteredWord.length - 1].setText(key.toLowerCase());
+
+            // Update letter slots and health bars
+            for (let i = 0; i < 5; i++) {
+                const slot = this.letterSlots[i];
+                const letter = word[i] || '_';
+                slot.setText(letter);
+                // Remove old health bar if present
+                if (this.letterSlotHealthBars[i]) {
+                    this.letterSlotHealthBars[i].destroy();
+                    this.letterSlotHealthBars[i] = null;
+                }
+                // Add health bar if letter is present and valid
+                if (LETTER_CONFIG[letter]) {
+                    const config = LETTER_CONFIG[letter];
+                    const maxHealth = config ? config.health : 1;
+                    const barWidth = 32;
+                    const barHeight = 6;
+                    const segmentGap = 2;
+                    const segmentWidth = (barWidth - (maxHealth - 1) * segmentGap) / maxHealth;
+                    const xStart = slot.x - barWidth / 2;
+                    const y = slot.y - (slot.displayHeight / 2) - 10;
+                    const healthBar = this.add.graphics();
+                    for (let j = 0; j < maxHealth; j++) {
+                        healthBar.fillStyle(0x00ff00);
+                        healthBar.fillRect(xStart + j * (segmentWidth + segmentGap), y, segmentWidth, barHeight);
+                    }
+                    this.letterSlotHealthBars[i] = healthBar;
+                    const tags = config.tags && config.tags.length ? `${config.tags.join(', ')}` : '';
+                    this.lastLetterInfoText.setText(
+                        `DMG: ${config.damage}  Cost: ${config.cost}`
+                    );
+                    this.lastLetterInfoText2.setText(
+                        `${tags ? '  ' + tags : ''}`
+                    );
+                }
+            }
         } else if (key === 'Backspace' && this.enteredWord.length > 0) {
             this.letterSlots[this.enteredWord.length - 1].setText('_');
             this.enteredWord = this.enteredWord.slice(0, -1);
@@ -185,6 +244,13 @@ export class WordEntryScene extends Phaser.Scene {
                 }
             }            
             this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
+            const i = this.enteredWord.length;
+            if (this.letterSlotHealthBars[i]) {
+                this.letterSlotHealthBars[i].destroy();
+                this.letterSlotHealthBars[i] = null;
+            }
+            this.lastLetterInfoText.setText( '' );
+            this.lastLetterInfoText2.setText( '' );
         } else if (key === 'Enter' && this.enteredWord.length === 5) {
             this.checkWordAndProceed();
         }
@@ -192,7 +258,7 @@ export class WordEntryScene extends Phaser.Scene {
         if (this.enteredWord.length === 5) {
             this.checkWordAndProceed();
         }
-      }
+    }
 
     checkWordAndProceed() {
         const word = this.enteredWord.toLowerCase();
@@ -203,6 +269,11 @@ export class WordEntryScene extends Phaser.Scene {
             this.enteredWord = '';
             for (let i = 0; i < this.letterSlots.length; i++) {
                 this.letterSlots[i].setText('_');
+                if (this.letterSlotHealthBars[i]) {
+                    this.letterSlotHealthBars[i].destroy();
+                    this.letterSlotHealthBars[i] = null;
+                }
+
             }
         } else { 
             let totalCost = 0;
@@ -232,26 +303,65 @@ export class WordEntryScene extends Phaser.Scene {
     }    
 
     handleInput(event) {
-        const word = event.target.value.toUpperCase();
+        const word = event.target.value.toLowerCase();
         let totalCost = 0;
-        
         // Calculate cost of current word
         for (let letter of word) {
             if (LETTER_CONFIG[letter]) {
                 totalCost += LETTER_CONFIG[letter].cost;
             }
         }
-
         // Update gold display
         this.goldText.setText(`Gold: ${gameState.gold - totalCost}`);
-
         // Disable input if cost exceeds gold
         if (totalCost > gameState.gold) {
             this.inputField.value = this.inputField.value.slice(0, -1);
         }
-
         // Clear validation message when input changes
         this.validationText.setText('');
+        // Update letter slots and health bars
+        for (let i = 0; i < 5; i++) {
+            const slot = this.letterSlots[i];
+            const letter = word[i] || '_';
+            slot.setText(letter);
+            // Remove old health bar if present
+            if (this.letterSlotHealthBars[i]) {
+                this.letterSlotHealthBars[i].destroy();
+                this.letterSlotHealthBars[i] = null;
+            }
+            // Add health bar if letter is present and valid
+            if (LETTER_CONFIG[letter]) {
+                const config = LETTER_CONFIG[letter];
+                const maxHealth = config ? config.health : 1;
+                const barWidth = 32;
+                const barHeight = 6;
+                const segmentGap = 2;
+                const segmentWidth = (barWidth - (maxHealth - 1) * segmentGap) / maxHealth;
+                const xStart = slot.x - barWidth / 2;
+                const y = slot.y - (slot.displayHeight / 2) - 10;
+                const healthBar = this.add.graphics();
+                for (let j = 0; j < maxHealth; j++) {
+                    healthBar.fillStyle(0x00ff00);
+                    healthBar.fillRect(xStart + j * (segmentWidth + segmentGap), y, segmentWidth, barHeight);
+                }
+                this.letterSlotHealthBars[i] = healthBar;
+            }
+        }
+        // Update last letter info text
+        if (word.length > 0) {
+            const lastLetter = word[word.length - 1];
+            const config = LETTER_CONFIG[lastLetter];
+            if (config) {
+                const tags = config.tags && config.tags.length ? `Tags: ${config.tags.join(', ')}` : '';
+                this.lastLetterInfoText.setText(
+                    `Letter: ${lastLetter.toUpperCase()}  Damage: ${config.damage}  Cost: ${config.cost}${tags ? '  ' + tags : ''}`
+                );
+            } else {
+                this.lastLetterInfoText.setText('');
+            }
+        } else {
+            this.lastLetterInfoText.setText('');
+        }
     }
 
     handleKeyDown(event) {
@@ -294,14 +404,16 @@ export class WordEntryScene extends Phaser.Scene {
 
     update() {
         if (this.starfield) this.starfield.update();
-
-        // Wavy animation for player and opponent words
+        // Wavy animation for opponent word and health bars
         const amplitude = 10; // subtle
         const frequency = 5; // radians per second
         const time = this.time.now / 1000;
-        if( this.opponentLetters ) {
+        if (this.opponentLetters) {
             this.opponentLetters.forEach(l => {
                 l.y = l.baseY + amplitude * Math.sin(frequency * time + l.waveIndex * 0.5);
+                if (l.healthBar) {
+                    l.healthBar.y = l.y - l.baseY;
+                }
             });
         }
     }

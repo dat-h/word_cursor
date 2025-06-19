@@ -12,7 +12,7 @@ export const LETTER_CONFIG = {
     'd': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
     'f': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
     'g': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
-    'h': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
+    'h': { health: 5, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
     'j': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
     'k': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: ['healing'] },
     'l': { health: 3, damage: 1, cost: 1, type: 'consonant', tags: [] },
