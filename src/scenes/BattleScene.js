@@ -32,11 +32,11 @@ export class BattleScene extends Phaser.Scene {
 
     createLetters(word, isPlayer) {
         const letters = isPlayer ? this.playerLetters : this.opponentLetters;
-        const y = isPlayer ? 500 : 100;
+        const y = isPlayer ? 400 : 200;
         // Layout for 320px width
         const areaWidth = 320;
         const fontSize = 16; // bitmapText font size
-        const scale = 3.5; // scale to fit 5 letters in 320px
+        const scale = 2.5; // scale to fit 5 letters in 320px
         const letterWidth = fontSize * scale; // 56px
         const gap = 8;
         const totalWidth = (letterWidth * word.length) + (gap * (word.length - 1));
@@ -46,8 +46,11 @@ export class BattleScene extends Phaser.Scene {
             const letter = word[i];
             const x = startX + i * (letterWidth + gap);
             // Create letter sprite
-            const sprite = this.add.bitmapText(x, y, 'nokia16', letter, fontSize);
+            const sprite = this.add.bitmapText(x, y, 'nokia16', letter, fontSize).setOrigin(0.5, 0.5);
             sprite.setScale(scale);
+            // Store baseY for wavy animation
+            sprite.baseY = y;
+            sprite.waveIndex = i;
             // Create health bar
             const healthBar = this.add.graphics();
             const maxHealth = LETTER_CONFIG[letter].health;
@@ -104,6 +107,8 @@ export class BattleScene extends Phaser.Scene {
     processActionPhase() {
         // On the very first turn, add 1 temp health to all opponent letters
         if (this.isFirstTurn && this.currentTurn === 'player' && this.currentActionIndex === 0) {
+            this.sound.play('heal');
+
             this.opponentLetters.forEach(letter => {
                 this.addTemporaryHealth(letter, 1);
             });
@@ -222,7 +227,8 @@ export class BattleScene extends Phaser.Scene {
                 if (defender.hasShield) {
                     defender.hasShield = false;
                     if (defender.shieldVisual) {
-                        defender.shieldVisual.destroy();
+                        defender.shieldVisual.shieldFlare.destroy();
+                        defender.shieldVisual.shieldCircle.destroy();
                         defender.shieldVisual = null;
                     }
                 } else {
@@ -232,6 +238,7 @@ export class BattleScene extends Phaser.Scene {
                         const tempDamage = Math.min(defender.tempHealth, damage);
                         defender.tempHealth -= tempDamage;
                         damage -= tempDamage;
+                        this.sound.play('damage');
                         // Show damage indicator for temp health (blue)
                         this.showFloatingText(defender.sprite.x, defender.sprite.y - 40, `-${tempDamage}`, '#33ccff');
                     }
@@ -275,8 +282,9 @@ export class BattleScene extends Phaser.Scene {
         emitter.explode(20); // Fixed number of particles for explosion
 
         // Destroy letter
+        letterData.healthBar.destroy();        
         letterData.sprite.destroy();
-        letterData.healthBar.destroy();
+
         letterData.sprite.active = false;
 
         // Check for game over
@@ -308,18 +316,24 @@ export class BattleScene extends Phaser.Scene {
             neighbor.hasShield = true;
             // Remove any existing shield visual
             if (neighbor.shieldVisual) {
-                neighbor.shieldVisual.destroy();
+                neighbor.shieldVisual.shieldFlare.destroy();
+                neighbor.shieldVisual.shieldCircle.destroy();
             }
-            // Create persistent shield visual
-            const shield = this.add.graphics();
-            shield.lineStyle(3, 0x00ffff);
-            shield.strokeCircle(neighbor.sprite.x, neighbor.sprite.y, 30);
-            neighbor.shieldVisual = shield;
+            // Create persistent shield visual centered on the letter
+            const shieldCircle = this.add.graphics();
+            shieldCircle.lineStyle(2, 0x00ffff);
+            shieldCircle.strokeCircle(neighbor.sprite.x, neighbor.sprite.y, 20);
+            neighbor.shieldVisual = shieldCircle;
+            const shieldFlare = this.add.sprite(neighbor.sprite.x, neighbor.sprite.y, 'flares', 'blue')
+                .setDepth(50)
+                .setAlpha(0.7)
+                .setScale(0.7);
+            neighbor.shieldVisual = {shieldFlare, shieldCircle};
+
         });
     }
 
     healNeighbors(letter) {
-        this.sound.play('heal');
         // Find closest living neighbors
         const letters = this.currentTurn === 'player' ? this.opponentLetters : this.playerLetters;
         const index = letters.indexOf(letter);
@@ -338,25 +352,56 @@ export class BattleScene extends Phaser.Scene {
                 break;
             }
         }
-        
+        if (neighbors.length === 0) return;
+
         neighbors.forEach(i => {
             const neighbor = letters[i];
             if (neighbor.health < neighbor.maxHealth) {
+                this.sound.play('heal');
+
                 const healAmount = 1;
                 neighbor.health = Math.min(neighbor.health + healAmount, neighbor.maxHealth);
                 this.updateHealthBar(neighbor);
                 // Show heal indicator
                 this.showFloatingText(neighbor.sprite.x, neighbor.sprite.y - 40, `+${healAmount}`, '#33ff33');
-                // Create heal effect
-                const healEffect = this.add.graphics();
-                healEffect.fillStyle(0x00ff00);
-                healEffect.fillCircle(neighbor.sprite.x, neighbor.sprite.y, 30);
+
+                // Create a glowing blue healEffect sprite (circle) that travels from caster to target
+                const healEffect = this.add.sprite(letter.sprite.x, letter.sprite.y, 'flares', 'green');
+
+                // Tween the particle to the target
                 this.tweens.add({
                     targets: healEffect,
-                    alpha: 0,
-                    duration: 500,
-                    onComplete: () => healEffect.destroy()
+                    x: neighbor.sprite.x,
+                    y: neighbor.sprite.y,
+                    scale: { from: 0.5, to: 0.7 },
+                    alpha: { from: 0.8, to: 1 },
+                    duration: 350,
+                    ease: 'Cubic.easeOut',
+                    onComplete: () => {
+                        healEffect.destroy();
+                        // Glowing blue light effect on the target
+                        const glow = this.add.sprite(neighbor.sprite.x, neighbor.sprite.y, 'flares', 'green')
+                            .setDepth(50)
+                            .setAlpha(0.7)
+                            .setScale(0.7);
+                        glow.setBlendMode(Phaser.BlendModes.ADD);
+
+                        this.tweens.add({
+                            targets: glow,
+                            scale: { from: 0.7, to: 1.7 },
+                            alpha: { from: 0.7, to: 0 },
+                            duration: 400,
+                            ease: 'Sine.easeOut',
+                            onComplete: () => {
+                                glow.destroy();
+                            }
+                        });
+                    }
                 });
+
+
+
+
             }
         });
     }
@@ -430,6 +475,38 @@ export class BattleScene extends Phaser.Scene {
 
     update() {
         if (this.starfield) this.starfield.update();
+        // Wavy animation for player and opponent words
+        const amplitude = 10; // subtle
+        const frequency = 5; // radians per second
+        const time = this.time.now / 1000;
+        // Player word: phase 0
+        this.playerLetters.forEach(l => {
+            l.sprite.y = l.sprite.baseY + amplitude * Math.sin(frequency * time + l.sprite.waveIndex * 0.5);
+            if (l.sprite.active) {
+                this.updateHealthBar(l);
+                // Redraw shield visual if present
+                if (l.shieldVisual) {
+                    l.shieldVisual.shieldFlare.y = l.sprite.y;
+                    l.shieldVisual.shieldCircle.clear();
+                    l.shieldVisual.shieldCircle.lineStyle(2, 0x00aaff);
+                    l.shieldVisual.shieldCircle.strokeCircle(l.sprite.x, l.sprite.y, 20);
+                }
+            }
+        });
+        // Opponent word: phase offset by PI/2
+        this.opponentLetters.forEach(l => {
+            l.sprite.y = l.sprite.baseY + amplitude * Math.sin(frequency * time + l.sprite.waveIndex * 0.5 + Math.PI / 2);
+            if (l.sprite.active) {
+                this.updateHealthBar(l);
+                // Redraw shield visual if present
+                if (l.shieldVisual) {
+                    l.shieldVisual.shieldFlare.y = l.sprite.y;
+                    l.shieldVisual.shieldCircle.clear();
+                    l.shieldVisual.shieldCircle.lineStyle(2, 0x00aaff);
+                    l.shieldVisual.shieldCircle.strokeCircle(l.sprite.x, l.sprite.y, 20);
+                }
+            }
+        });
     }
 
     // --- Temporary Health Implementation ---

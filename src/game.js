@@ -65,5 +65,5 @@ export const gameState = {
     currentWord: '',
     opponentWord: '',
     survivingLetters: [],
-    isMuted: false
+    isMuted: true
 }; 

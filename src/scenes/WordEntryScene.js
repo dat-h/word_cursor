@@ -38,13 +38,35 @@ export class WordEntryScene extends Phaser.Scene {
             this.fontSize
         ).setOrigin(0.5, 0);
 
-        this.opponentText = this.add.bitmapText(
-            width / 2,
-            topY + 36,
-            this.font,
-            gameState.opponentWord,
-            this.fontSize
-        ).setOrigin(0.5, 0); 
+        // this.opponentText = this.add.bitmapText(
+        //     width / 2,
+        //     topY + 36,
+        //     this.font,
+        //     gameState.opponentWord,
+        //     this.fontSize
+        // ).setOrigin(0.5, 0); 
+
+
+        // Create opponent word with wavy animation
+        this.opponentLetters = [];
+        const word = gameState.opponentWord;
+        const fontSize = 24;
+        const scale = 1.5;
+        const letterWidth = fontSize * scale;
+        const gap = 4;
+        const totalWidth = (letterWidth * word.length) + (gap * (word.length - 1));
+        const startOpponentX = width / 2 - totalWidth / 2 + letterWidth / 2;
+        const baseY = topY + 50;
+
+        for (let i = 0; i < word.length; i++) {
+            const letter = word[i];
+            const x = startOpponentX + i * (letterWidth + gap);
+            const sprite = this.add.bitmapText(x, baseY, this.font, letter, fontSize).setOrigin(0.5, 0.5);
+            sprite.setScale(scale);
+            sprite.baseY = baseY;
+            sprite.waveIndex = i;
+            this.opponentLetters.push(sprite);
+        }
 
         // Display validation message
         this.validationText = this.add.bitmapText(width / 2, height / 2 + 100, this.font, '', this.fontSize).setOrigin(0.5);
@@ -171,7 +193,11 @@ export class WordEntryScene extends Phaser.Scene {
             if (totalCost <= gameState.gold) {
                 gameState.currentWord = word.toLowerCase();
                 gameState.gold -= totalCost;
-                this.scene.start('BattleScene');
+                // Fade to black for 700ms before starting battle
+                this.cameras.main.fadeOut(700, 0, 0, 0);
+                this.cameras.main.once('camerafadeoutcomplete', () => {
+                    this.scene.start('BattleScene');
+                });
             } else {
                 this.validationText.setText('Not enough gold!');
             }
@@ -203,25 +229,27 @@ export class WordEntryScene extends Phaser.Scene {
 
     handleKeyDown(event) {
         if (event.key === 'Enter') {
-            const word = this.inputField.value.toUpperCase();
+            const word = this.inputField.value.toLowerCase();
             if (word.length === 5) {
                 // Validate word exists in dictionary
                 if (!isValidWord(word)) {
                     this.validationText.setText('Not a valid word!');
                     return;
                 }
-
                 let totalCost = 0;
                 for (let letter of word) {
                     if (LETTER_CONFIG[letter]) {
                         totalCost += LETTER_CONFIG[letter].cost;
                     }
                 }
-                
                 if (totalCost <= gameState.gold) {
                     gameState.currentWord = word;
                     gameState.gold -= totalCost;
-                    this.scene.start('BattleScene');
+                    // Fade to black for 300ms before starting battle
+                    this.cameras.main.fadeOut(300, 0, 0, 0);
+                    this.cameras.main.once('camerafadeoutcomplete', () => {
+                        this.scene.start('BattleScene');
+                    });
                 }
             }
         }
@@ -236,5 +264,15 @@ export class WordEntryScene extends Phaser.Scene {
 
     update() {
         if (this.starfield) this.starfield.update();
+
+        // Wavy animation for player and opponent words
+        const amplitude = 10; // subtle
+        const frequency = 5; // radians per second
+        const time = this.time.now / 1000;
+        if( this.opponentLetters ) {
+            this.opponentLetters.forEach(l => {
+                l.y = l.baseY + amplitude * Math.sin(frequency * time + l.waveIndex * 0.5);
+            });
+        }
     }
 } 
