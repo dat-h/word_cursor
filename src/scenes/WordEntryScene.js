@@ -218,8 +218,8 @@ export class WordEntryScene extends Phaser.Scene {
             ['z', 'x', 'c', 'v', 'b', 'n', 'm']
         ];
         
-        const keySize = 30;
-        const keySpacing = 4;
+        const keySize = 25;
+        const keySpacing = 8;
         const keyboardY = slotsY + 170; // Position below existing letter display
         this.keyboardKeys = [];
 
@@ -228,20 +228,65 @@ export class WordEntryScene extends Phaser.Scene {
             const startX = this.cameras.main.width / 2 - rowWidth / 2;
             
             row.forEach((letter, colIndex) => {
-                // Only create keys for available letters
-                if (this.availableLetters.includes(letter)) {
-                    const x = startX + colIndex * (keySize + keySpacing) + keySize / 2;
-                    const y = keyboardY + rowIndex * (keySize + keySpacing) + keySize / 2;
-                    
-                    const key = this.add.bitmapText(x, y, this.font, letter, 24)
-                        .setOrigin(0.5)
-                        .setInteractive();
-                    
-                    key.on('pointerdown', () => this.handleLetterButton(letter));
-                    this.keyboardKeys.push(key);
+                const x = startX + colIndex * (keySize + keySpacing) + keySize / 2;
+                const y = keyboardY + rowIndex * (keySize + keySpacing) + keySize / 2;
+                
+                // Check if letter is available
+                const isAvailable = this.availableLetters.includes(letter);
+                
+                const key = this.add.bitmapText(x, y, this.font, letter, 24)
+                    .setOrigin(0.5);
+
+                // Create square background
+                const square = this.add.graphics();
+                if (isAvailable) {
+                    // Neon green square for available letters
+                    square.lineStyle(2, 0x39ff14); // Neon green
+                    square.strokeRect(x - keySize/2, y - keySize/2, keySize, keySize);
+                    key.setAlpha(1);
+                } else {
+                    // Grey square with 80% transparency for unavailable letters
+                    square.fillStyle(0x888888, 0.55); // Grey with 80% transparency
+                    square.fillRect(x - keySize/2, y - keySize/2, keySize, keySize);
+                    key.setAlpha(0.25);
                 }
+
+                
+                // Only make available keys interactive
+                if (isAvailable) {
+                    key.setInteractive();
+                    key.on('pointerdown', () => {
+                        this.sound.play('attack');
+                        this.handleLetterButton(letter);
+                    });
+                }
+                
+                // Store both the key and its square
+                this.keyboardKeys.push({ key, square });
             });
         });
+
+        // Add backspace key on the bottom right
+        const backspaceX = this.cameras.main.width / 2 + (qwertyLayout[0].length * (keySize + keySpacing)) / 2 - keySize;
+        const backspaceY = keyboardY + 2 * (keySize + keySpacing) + keySize / 2;    
+        
+        // Create neon green square for backspace
+        const backspaceSquare = this.add.graphics();
+        backspaceSquare.lineStyle(2, 0x39ff14); // Neon green
+        backspaceSquare.strokeRect(backspaceX - keySize/2, backspaceY - keySize/2, keySize, keySize);
+        
+        const backspaceKey = this.add.bitmapText(backspaceX, backspaceY, this.font, '<', 20)
+            .setOrigin(0.5)
+            .setInteractive();
+        
+        backspaceKey.on('pointerdown', () => {
+            this.sound.play('attack');
+            // Simulate backspace key press
+            const event = { key: 'Backspace' };
+            this.handleWordInput(event);
+        });
+        
+        this.keyboardKeys.push({ key: backspaceKey, square: backspaceSquare });
     }
 
     handleWordInput(event) {
