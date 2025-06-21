@@ -162,7 +162,8 @@ export class BattleScene extends Phaser.Scene {
         }
 
         this.currentActionIndex++;
-        this.time.delayedCall(500, this.processTurn, [], this);
+        const delay = gameState.battleSpeed === 'fast' ? 250 : 500;
+        this.time.delayedCall(delay, this.processTurn, [], this);
     }
 
     processAttackPhase() {
@@ -197,9 +198,9 @@ export class BattleScene extends Phaser.Scene {
 
         // New logic using tags:
         const config = LETTER_CONFIG[attackingLetter.letter];
-        if (config.tags && config.tags.includes('special-targeting-x')) {
+        if (config.tags && config.tags.includes('target-left')) {
             targetIndex = 0;
-        } else if (config.tags && config.tags.includes('special-targeting-y')) {
+        } else if (config.tags && config.tags.includes('target-right')) {
             targetIndex = defender.length - 1;
         } else {
             targetIndex = this.currentActionIndex;
@@ -223,24 +224,57 @@ export class BattleScene extends Phaser.Scene {
         }
         
         this.currentActionIndex++;
-        this.time.delayedCall(500, this.processTurn, [], this);
+        const delay = gameState.battleSpeed === 'fast' ? 250 : 500;
+        this.time.delayedCall(delay, this.processTurn, [], this);
     }
 
     attack(attacker, defender) {
         // Play attack sound
         this.sound.play('attack');
+        let damage = LETTER_CONFIG[attacker.letter].damage;
+        const config = LETTER_CONFIG[attacker.letter];
+        const isDouble = config.tags && config.tags.includes('double');
+        
+        if (isDouble) {
+            // Double attack - create first particle with callback for second attack
+            this.createAttackParticle(attacker, defender, damage, 0, () => {
+                // Callback when first attack completes - find new target and create second attack
+                const newTarget = this.findAliveTarget(defender);
+                this.createAttackParticle(attacker, newTarget, damage, 1);
+            });
+        } else {
+            // Single attack
+            this.createAttackParticle(attacker, defender, damage, 0);
+        }
+    }
+
+    findAliveTarget(originalTarget) {
+        // If original target is still alive, use it
+        if (originalTarget.sprite.active) {
+            return originalTarget;
+        }
+        
+        // Find the first alive target from the same team as original target
+        const defenderTeam = this.playerLetters.includes(originalTarget) ? this.playerLetters : this.opponentLetters;
+        const aliveTarget = defenderTeam.find(letter => letter.sprite.active);
+        
+        return aliveTarget || originalTarget; // Return original if no alive targets found
+    }
+
+    createAttackParticle(attacker, defender, damage, particleIndex, onCompleteCallback = null) {
         const particle = this.add.sprite(attacker.sprite.x, attacker.sprite.y, 'flares', 'yellow');
-        particle.setScale(0.25);
+        particle.setScale(0.25 * damage); // Scale particle based on damage
         particle.setAlpha(1);
         particle.setTint(0xffffff);
         particle.setBlendMode(Phaser.BlendModes.ADD);
 
-        // Create attack animation
+        // Create attack animation with speed adjustment
+        const duration = gameState.battleSpeed === 'fast' ? 100 : 200;
         const tween = this.tweens.add({
             targets: particle,
             x: defender.sprite.x,
             y: defender.sprite.y,
-            duration: 200,
+            duration: duration,
             yoyo: false,
             onComplete: () => {
                 particle.destroy();
@@ -251,36 +285,42 @@ export class BattleScene extends Phaser.Scene {
                         defender.shieldVisual.shieldCircle.destroy();
                         defender.shieldVisual = null;
                     }
+                }
+                // Apply damage
+                let remainingDamage = damage;
+                // Damage tempHealth first
+                if (defender.tempHealth && defender.tempHealth > 0) {
+                    const tempDamage = Math.min(defender.tempHealth, remainingDamage);
+                    defender.tempHealth -= tempDamage;
+                    remainingDamage -= tempDamage;
+                    this.sound.play('damage');
+                    // Show damage indicator for temp health (blue)
+                    this.showFloatingText(defender.sprite.x, defender.sprite.y - 40, `-${tempDamage}`, '#33ccff');
+                }
+                if (remainingDamage > 0) {
+                    defender.health -= remainingDamage;
+                    this.sound.play('damage');
+                    // Show damage indicator for real health (red)
+                    this.showFloatingText(defender.sprite.x, defender.sprite.y - 40, `-${remainingDamage}`, '#ff3333');
+                }
+                // Shake effect with speed adjustment
+                const shakeDuration = gameState.battleSpeed === 'fast' ? 25 : 50;
+                this.tweens.add({
+                    targets: defender.sprite,
+                    x: defender.sprite.x + 5,
+                    duration: shakeDuration,
+                    yoyo: true,
+                    repeat: 3
+                });
+                if (defender.health <= 0) {
+                    this.destroyLetter(defender);
                 } else {
-                    let damage = LETTER_CONFIG[attacker.letter].damage;
-                    // Damage tempHealth first
-                    if (defender.tempHealth && defender.tempHealth > 0) {
-                        const tempDamage = Math.min(defender.tempHealth, damage);
-                        defender.tempHealth -= tempDamage;
-                        damage -= tempDamage;
-                        this.sound.play('damage');
-                        // Show damage indicator for temp health (blue)
-                        this.showFloatingText(defender.sprite.x, defender.sprite.y - 40, `-${tempDamage}`, '#33ccff');
-                    }
-                    if (damage > 0) {
-                        defender.health -= damage;
-                        this.sound.play('damage');
-                        // Show damage indicator for real health (red)
-                        this.showFloatingText(defender.sprite.x, defender.sprite.y - 40, `-${damage}`, '#ff3333');
-                    }
-                    // Shake effect
-                    this.tweens.add({
-                        targets: defender.sprite,
-                        x: defender.sprite.x + 5,
-                        duration: 50,
-                        yoyo: true,
-                        repeat: 3
-                    });
-                    if (defender.health <= 0) {
-                        this.destroyLetter(defender);
-                    } else {
-                        this.updateHealthBar(defender);
-                    }
+                    this.updateHealthBar(defender);
+                }
+                
+                // Call the completion callback if provided
+                if (onCompleteCallback) {
+                    onCompleteCallback();
                 }
             }
         });
@@ -289,8 +329,18 @@ export class BattleScene extends Phaser.Scene {
     destroyLetter(letterData) {
         this.sound.play('explode');
         
+        // Check for revenant ability before destroying
+        const config = LETTER_CONFIG[letterData.letter];
+        const revenantTag = config.tags ? config.tags.find(tag => tag.startsWith('revenant-')) : null;
+        
+        // Store position before destroying sprite
+        const spriteX = letterData.sprite.x;
+        const spriteY = letterData.sprite.y;
+        const baseY = letterData.sprite.baseY;
+        const waveIndex = letterData.sprite.waveIndex;
+        
         // Create explosion particles
-        const emitter = this.add.particles(letterData.sprite.x, letterData.sprite.y, 'flares', {
+        const emitter = this.add.particles(spriteX, spriteY, 'flares', {
             frame: [ 'red', 'yellow', 'white' ],
             lifespan: 600,
             speed: { min: 150, max: 250 },
@@ -307,8 +357,63 @@ export class BattleScene extends Phaser.Scene {
 
         letterData.sprite.active = false;
 
-        // Check for game over
-        this.checkGameOver();
+        // Handle revenant resurrection
+        if (revenantTag) {
+            const resurrectLetter = revenantTag.split('-')[1]; // Extract the letter from 'revenant-v'
+            const resurrectConfig = LETTER_CONFIG[resurrectLetter];
+            
+            if (resurrectConfig) {
+                // Delay resurrection
+                const delay = gameState.battleSpeed === 'fast' ? 300 : 600;
+                this.time.delayedCall(delay, () => {
+                    // Create resurrection effect
+                    const resurrectionEmitter = this.add.particles(spriteX, spriteY, 'flares', {
+                        frame: [ 'green', 'blue', 'white' ],
+                        lifespan: 800,
+                        speed: { min: 100, max: 200 },
+                        scale: { start: 0.4, end: 0 },
+                        gravityY: -50,
+                        blendMode: 'ADD',
+                        emitting: false
+                    });
+                    resurrectionEmitter.explode(15);
+                    
+                    // Resurrect as new letter
+                    letterData.letter = resurrectLetter;
+                    letterData.health = resurrectConfig.health;
+                    letterData.maxHealth = resurrectConfig.health;
+                    letterData.tempHealth = 0;
+                    letterData.hasShield = false;
+                    
+                    // Recreate sprite and health bar
+                    letterData.sprite = this.add.bitmapText(spriteX, spriteY, 'nokia16', resurrectLetter, 16).setOrigin(0.5, 0.5);
+                    letterData.sprite.setScale(2.5);
+                    letterData.sprite.baseY = baseY;
+                    letterData.sprite.waveIndex = waveIndex;
+                    
+                    letterData.healthBar = this.add.graphics();
+                    this.updateHealthBar(letterData);
+                    
+                    // Make sprite active again
+                    letterData.sprite.active = true;
+                    
+                    // Play resurrection sound
+                    this.sound.play('heal');
+                    
+                    // Show resurrection indicator
+                    this.showFloatingText(spriteX, spriteY - 40, 'AVENGE!', '#ffffff');
+                    
+                    // Check for game over after resurrection
+                    this.checkGameOver();
+                }, [], this);
+            } else {
+                // No resurrection - check game over immediately
+                this.checkGameOver();
+            }
+        } else {
+            // No revenant tag - check game over immediately
+            this.checkGameOver();
+        }
     }
 
     createShield(letter) {
@@ -443,52 +548,215 @@ export class BattleScene extends Phaser.Scene {
     checkGameOver() {
         const playerAlive = this.playerLetters.some(letter => letter.sprite.active);
         const opponentAlive = this.opponentLetters.some(letter => letter.sprite.active);
-
+        
         if (!playerAlive) {
             saveGameState();
             this.scene.start('GameOverScene');
         } else if (!opponentAlive) {
             // Player wins
-            gameState.level++;
-            gameState.gold += 1; // Reward for winning
-            // Refund surviving letters
-            this.playerLetters.forEach(letter => {
-                if (letter.sprite.active) {
-                    gameState.gold += LETTER_CONFIG[letter.letter].cost;
-                }
-            });
-            // Add a new random letter to opponentAvailableLetters and update priority
+            // --- WIN POPUP LOGIC START ---
+            // Gather surviving player letters
+            const survivingLetters = this.playerLetters.filter(l => l.sprite.active).map(l => l.letter);
+            // Pick two new letters not in availableLetters
             const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
-            const current = gameState.opponentAvailableLetters || [];
-            const availablePool = alphabet.filter(l => !current.includes(l));
-            let newLetter = null;
-            if (availablePool.length > 0) {
-                Phaser.Utils.Array.Shuffle(availablePool);
-                newLetter = availablePool[0];
-                gameState.opponentAvailableLetters.push(newLetter);
-                // Update priority: keep only last two new letters
-                if (!gameState.opponentPriorityLetters) gameState.opponentPriorityLetters = [];
-                gameState.opponentPriorityLetters.push(newLetter);
-                if (gameState.opponentPriorityLetters.length > 2) {
-                    gameState.opponentPriorityLetters = gameState.opponentPriorityLetters.slice(-2);
-                }
+            const playerLetters = (gameState.availableLetters || []).slice();
+            const newLetterPool = alphabet.filter(l => !playerLetters.includes(l));
+            Phaser.Utils.Array.Shuffle(newLetterPool);
+            const letterChoices = newLetterPool.slice(0, 2);
+            // Reward for winning
+            this.createFireworks();
+            this.sound.play('win');
+            // Show win popup
+            this.showWinPopup(survivingLetters, letterChoices);
+            // --- WIN POPUP LOGIC END ---
+        }
+    }
+
+    showWinPopup(survivingLetters, letterChoices) {
+        // Overlay
+        const { width, height } = this.cameras.main;
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+        const overlay = this.add.rectangle(width/2, height/2, width, height, 0x000000, 0.7).setDepth(1000);
+        // Panel
+        const panelWidth = 280;
+        const panelHeight = 450;
+        const panel = this.add.rectangle(width/2, height/2, panelWidth, panelHeight, 0x222222, 0.95).setDepth(1001);
+        panel.setStrokeStyle(3, 0x39ff14);
+        // Title
+        this.add.bitmapText(width/2, height/2 - 170, 'nokia16', 'Victory!', 32).setOrigin(0.5).setDepth(1002);
+        // Surviving letters label
+        this.add.bitmapText(width/2, height/2 - 135, 'nokia16', 'Surviving Letters:', 18).setOrigin(0.5).setDepth(1002);
+        // Surviving letters (centered)
+        const slotSpacing = 40;
+        const startX = width/2 - (slotSpacing * (survivingLetters.length-1))/2;
+        survivingLetters.forEach((letter, i) => {
+            const sprite = this.add.bitmapText(startX + i*slotSpacing, height/2 - 110, 'nokia16', letter, 32).setOrigin(0.5).setDepth(1002);
+            sprite.setTint(0x39ff14);
+        });
+
+        // --- Gold reward calculation ---
+        const baseReward = 2;
+        let refund = 0;
+        this.playerLetters.forEach(letterObj => {
+            if (letterObj.sprite.active) {
+                refund += LETTER_CONFIG[letterObj.letter].cost;
             }
-            // Choose a new random opponent word for the next round, prioritizing new letters
-            gameState.opponentWord = getRandomWordFromLettersWithPriority(
-                gameState.opponentAvailableLetters,
-                gameState.opponentPriorityLetters || []
-            );
-            saveGameState();
-            // Show fireworks and delay scene switch
-            if (gameState.level % 1 === 0) {
-                this.createFireworks();
-                this.sound.play('win');
-                this.time.delayedCall(2500, () => {
+        });
+        const totalReward = baseReward + refund;
+        this.add.bitmapText(width / 2 + 60, height/2 - 70, 'nokia16', `Gold Reward: $${baseReward}`, 18).setOrigin(1).setDepth(1002);
+        this.add.bitmapText(width / 2 + 60, height/2 - 50, 'nokia16', `Refund: $${refund}`, 18).setOrigin(1).setDepth(1002);
+        this.add.bitmapText(width / 2 + 60, height/2 - 30, 'nokia16', `Funds: $${totalReward + gameState.gold}`, 18).setOrigin(1).setDepth(1002);
+
+        const availableLettersY = height/2 - 10;
+        // Current available letters
+        this.add.bitmapText(width/2, availableLettersY, 'nokia16', 'Available Letters:', 18).setOrigin(0.5).setDepth(1002);
+        const availableLetters = gameState.availableLetters || [];
+        const availableSpacing = 15;
+        const maxLettersPerRow = 13; // Maximum letters that fit in one row
+        const availableStartX = width/2 - (availableSpacing * (Math.min(availableLetters.length, maxLettersPerRow) - 1)) / 2;
+        
+        availableLetters.forEach((letter, i) => {
+            const row = Math.floor(i / maxLettersPerRow);
+            const col = i % maxLettersPerRow;
+            const x = availableStartX + col * availableSpacing;
+            const y = availableLettersY + 20 + row * 15; // 25px spacing between rows
+            const sprite = this.add.bitmapText(x, y, 'nokia16', letter, 20).setOrigin(0.5).setDepth(1002);
+            // sprite.setTint(0x39ff14);
+        });
+
+        // --- Infocard buttons for letter choices ---
+        const cardWidth = 250;
+        const cardHeight = 54;
+        const cardSpacing = 15;
+
+        const startCardY = height/2 + 75  + cardHeight/2;
+
+        if (letterChoices.length > 0) {
+            // Choice prompt
+            this.add.bitmapText(width/2, startCardY - 45, 'nokia16', 'Choose a new letter:', 18).setOrigin(0.5).setDepth(1002);
+
+            // Show letter choice infocards
+            letterChoices.forEach((letter, i) => {
+                const x = width/2;
+                const y = startCardY + i * (cardHeight + cardSpacing);
+                // Card background (rounded rectangle, button)
+                const card = this.add.graphics().setDepth(1002);
+                card.fillStyle(0x222222, 0.85);
+                card.fillRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8);
+                card.lineStyle(2, 0xffff00, 1);
+                card.strokeRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8);
+                // Make the card interactive
+                const hitArea = this.add.rectangle(x, y, cardWidth, cardHeight, 0x000000, 0).setDepth(1002).setInteractive({ useHandCursor: true });
+                // Hover/press feedback
+                hitArea.on('pointerover', () => card.lineStyle(3, 0x39ff14, 1).strokeRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8));
+                hitArea.on('pointerout', () => card.lineStyle(2, 0xffff00, 1).strokeRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8));
+                hitArea.on('pointerdown', () => card.fillStyle(0x333333, 1).fillRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8));
+                hitArea.on('pointerup', () => card.fillStyle(0x222222, 0.85).fillRoundedRect(x - cardWidth/2, y - cardHeight/2, cardWidth, cardHeight, 8));
+                // Letter (large)
+                const letterText = this.add.bitmapText(x - cardWidth/2 + 20, y, 'nokia16', letter, 24).setOrigin(0, 0.5).setDepth(1002);
+                // Segmented health bar above the letter
+                const config = LETTER_CONFIG[letter];
+                const maxHealth = config.health;
+                const barWidth = 24;
+                const barHeight = 3;
+                const segmentGap = 1;
+                const segmentWidth = (barWidth - (maxHealth - 1) * segmentGap) / maxHealth;
+                const barX = x - cardWidth/2 + 15;
+                const barY = y - 18;
+                const healthBar = this.add.graphics().setDepth(1002);
+                for (let j = 0; j < maxHealth; j++) {
+                    healthBar.fillStyle(0x00ff00);
+                    healthBar.fillRect(barX + j * (segmentWidth + segmentGap), barY, segmentWidth, barHeight);
+                }
+                // Info: health, damage, cost, tags
+                const info1 = `ATK: ${config.damage} Cost: $${config.cost}`;
+                const tags = config.tags && config.tags.length ? config.tags.join(', ') : '';
+                const info2 = tags;
+                this.add.bitmapText(x - cardWidth/2 + 70, y - 10, 'nokia16', info1, 16).setOrigin(0, 0.5).setDepth(1002);
+                this.add.bitmapText(x - cardWidth/2 + 70, y + 12, 'nokia16', info2, 14).setOrigin(0, 0.5).setDepth(1002);
+                // Click handler for the whole card
+                hitArea.on('pointerup', () => {
+                    // Add chosen letter to availableLetters
+                    if (!gameState.availableLetters) gameState.availableLetters = [];
+                    gameState.availableLetters.push(letter);
+                    gameState.availableLetters.sort();
+                    // Clean up popup
+                    overlay.destroy();
+                    panel.destroy();
+                    this.children.list.filter(o => o.depth === 1002).forEach(o => o.destroy());
+                    // Continue progression
+                    gameState.level++;
+                    gameState.gold += totalReward;
+                    // Add a new random letter to opponentAvailableLetters and update priority
+                    const current = gameState.opponentAvailableLetters || [];
+                    const availablePool = alphabet.filter(l => !current.includes(l));
+                    let newLetter = null;
+                    if (availablePool.length > 0) {
+                        Phaser.Utils.Array.Shuffle(availablePool);
+                        newLetter = availablePool[0];
+                        gameState.opponentAvailableLetters.push(newLetter);
+                        if (!gameState.opponentPriorityLetters) gameState.opponentPriorityLetters = [];
+                        gameState.opponentPriorityLetters.push(newLetter);
+                        if (gameState.opponentPriorityLetters.length > 2) {
+                            gameState.opponentPriorityLetters = gameState.opponentPriorityLetters.slice(-2);
+                        }
+                    }
+                    // Choose a new random opponent word for the next round, prioritizing new letters
+                    gameState.opponentWord = getRandomWordFromLettersWithPriority(
+                        gameState.opponentAvailableLetters,
+                        gameState.opponentPriorityLetters || []
+                    );
+                    saveGameState();
+                    this.time.delayedCall(500, () => {
+                        this.scene.start('WordEntryScene');
+                    });
+                });
+            });
+        } else {
+            // No more letters available - show continue button
+            const continueButton = this.add.bitmapText(width/2, startCardY, 'nokia16', 'Continue', 32)
+                .setOrigin(0.5)
+                .setDepth(1002)
+                .setInteractive({ useHandCursor: true });
+            continueButton.setTint(0x39ff14);
+            
+            // Hover effect
+            continueButton.on('pointerover', () => continueButton.setTint(0xffff00));
+            continueButton.on('pointerout', () => continueButton.setTint(0x39ff14));
+            
+            continueButton.on('pointerup', () => {
+                // Clean up popup
+                overlay.destroy();
+                panel.destroy();
+                this.children.list.filter(o => o.depth === 1002).forEach(o => o.destroy());
+                // Continue progression without adding new letter
+                gameState.level++;
+                gameState.gold += totalReward;
+                // Add a new random letter to opponentAvailableLetters and update priority
+                const current = gameState.opponentAvailableLetters || [];
+                const availablePool = alphabet.filter(l => !current.includes(l));
+                let newLetter = null;
+                if (availablePool.length > 0) {
+                    Phaser.Utils.Array.Shuffle(availablePool);
+                    newLetter = availablePool[0];
+                    gameState.opponentAvailableLetters.push(newLetter);
+                    if (!gameState.opponentPriorityLetters) gameState.opponentPriorityLetters = [];
+                    gameState.opponentPriorityLetters.push(newLetter);
+                    if (gameState.opponentPriorityLetters.length > 2) {
+                        gameState.opponentPriorityLetters = gameState.opponentPriorityLetters.slice(-2);
+                    }
+                }
+                // Choose a new random opponent word for the next round, prioritizing new letters
+                gameState.opponentWord = getRandomWordFromLettersWithPriority(
+                    gameState.opponentAvailableLetters,
+                    gameState.opponentPriorityLetters || []
+                );
+                saveGameState();
+                this.time.delayedCall(500, () => {
                     this.scene.start('WordEntryScene');
                 });
-            } else {
-                this.scene.start('WordEntryScene');
-            }
+            });
         }
     }
 

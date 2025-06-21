@@ -88,8 +88,6 @@ export class WordEntryScene extends Phaser.Scene {
             this.opponentLetters.push(sprite);
         }
 
-        // Display validation message
-        this.validationText = this.add.bitmapText(width / 2, height / 2 + 100, this.font, '', this.fontSize).setOrigin(0.5);
 
         // Focus invisible input for keyboard capture
         if (window.focusInvisibleInput) {
@@ -124,10 +122,13 @@ export class WordEntryScene extends Phaser.Scene {
             this.letterSlotHealthBars.push(null);
         }
         // Add info card background and elements for last letter entered
-        const cardWidth = 200;
+        const cardWidth = 250;
         const cardHeight = 54;
         const cardX = this.cameras.main.width / 2 - cardWidth / 2;
         const cardY = slotsY - 90;
+        // Display validation message
+        this.validationText = this.add.bitmapText(width / 2, slotsY - 15, this.font, '', this.fontSize).setOrigin(0.5).setDepth(9999);
+
         this.infoCard = this.add.graphics();
         this.infoCard.fillStyle(0x222222, 0.85);
         this.infoCard.fillRoundedRect(cardX, cardY, cardWidth, cardHeight, 8);
@@ -178,31 +179,55 @@ export class WordEntryScene extends Phaser.Scene {
             this.scene.get('MenuScene').scene.resumeTarget = this.scene.key;
             saveGameState();
         });
-        this.availableLettersLabel = this.add.bitmapText(width/2, slotsY + 40, this.font, 'Available Letters', 16).setOrigin(0.5);
 
         // --- Available Letters Setup ---
         if (!gameState.availableLetters) {
-            const baseLetters = ['r', 's', 't', 'l', 'n', 'e'];
+            const baseLetters = ['r', 's', 't', 'l', 'n', 'e', 'o'];           
             const alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
+            // const baseLetters = alphabet.slice(0, -4);
             const availablePool = alphabet.filter(l => !baseLetters.includes(l));
             Phaser.Utils.Array.Shuffle(availablePool);
-            const randomLetters = availablePool.slice(0, 3);
+            const randomLetters = availablePool.slice(0, 2);
             gameState.availableLetters = baseLetters.concat(randomLetters).sort();
             saveGameState();
         }
         this.availableLetters = gameState.availableLetters;
 
+
+
+
         // Display available letters as buttons below the letter slots
-        this.letterButtons = [];
-        const buttonSpacing = 25;
-        const buttonY = slotsY + 60;
-        const startXButtons = this.cameras.main.width / 2 - (buttonSpacing * 4);
-        this.availableLetters.forEach((letter, i) => {
-            const btn = this.add.bitmapText(startXButtons + i * buttonSpacing, buttonY, this.font, letter, 20)
-                .setOrigin(0.5);
-            // Convert to display-only (remove interactive properties)
-            this.letterButtons.push(btn);
+        // this.letterButtons = [];
+        // const buttonSpacing = 25;
+        // const buttonY = slotsY + 60;
+        // const startXButtons = this.cameras.main.width/2 - (buttonSpacing * (this.availableLetters.length-1))/2;
+        // this.availableLetters.forEach((letter, i) => {
+        //     const btn = this.add.bitmapText(startXButtons + i * buttonSpacing, buttonY, this.font, letter, 20)
+        //         .setOrigin(0.5);
+        //     // Convert to display-only (remove interactive properties)
+        //     this.letterButtons.push(btn);
+        // });
+
+
+        const availableLettersY = slotsY + 30;
+        // Current available letters
+        this.add.bitmapText(width/2, availableLettersY, this.font, 'Available Letters:', 16).setOrigin(0.5);
+        const availableLetters = gameState.availableLetters || [];
+        const availableSpacing = 20;
+        const maxLettersPerRow = 13; // Maximum letters that fit in one row
+        const availableStartX = this.cameras.main.width/2 - (availableSpacing * (Math.min(availableLetters.length, maxLettersPerRow) - 1)) / 2;
+        
+        availableLetters.forEach((letter, i) => {
+            const row = Math.floor(i / maxLettersPerRow);
+            const col = i % maxLettersPerRow;
+            const x = availableStartX + col * availableSpacing;
+            const y = availableLettersY + 20 + row * 15; // 25px spacing between rows
+            const sprite = this.add.bitmapText(x, y, 'nokia16', letter, 16).setOrigin(0.5);
+            // sprite.setTint(0x39ff14);
         });
+
+
+
 
         // Add QWERTY keyboard for available letters
         this.createQWERTYKeyboard();
@@ -219,7 +244,7 @@ export class WordEntryScene extends Phaser.Scene {
         ];
         
         const keySize = 25;
-        const keySpacing = 8;
+        const keySpacing = 7;
         const keyboardY = slotsY + 170; // Position below existing letter display
         this.keyboardKeys = [];
 
@@ -254,8 +279,10 @@ export class WordEntryScene extends Phaser.Scene {
                 
                 // Only make available keys interactive
                 if (isAvailable) {
-                    key.setInteractive();
-                    key.on('pointerdown', () => {
+                    // Create invisible hit area covering the entire square
+                    const hitArea = this.add.rectangle(x, y, keySize, keySize, 0x000000, 0)
+                        .setInteractive({ useHandCursor: true });
+                    hitArea.on('pointerdown', () => {
                         this.sound.play('attack');
                         this.handleLetterButton(letter);
                     });
@@ -294,7 +321,6 @@ export class WordEntryScene extends Phaser.Scene {
         const key = event.key.toLowerCase();
         let totalCost = 0;
         this.validationText.setText('');
-
         if (/^[a-z]$/.test(key) && this.enteredWord.length < 5 && this.availableLetters.includes(key)) {
             let word = this.enteredWord + key;
 
@@ -324,6 +350,7 @@ export class WordEntryScene extends Phaser.Scene {
                     this.letterSlotHealthBars[i].destroy();
                     this.letterSlotHealthBars[i] = null;
                 }
+                
                 // Add health bar if letter is present and valid
                 if (LETTER_CONFIG[letter]) {
                     const config = LETTER_CONFIG[letter];
@@ -339,6 +366,25 @@ export class WordEntryScene extends Phaser.Scene {
                         healthBar.fillStyle(0x00ff00);
                         healthBar.fillRect(xStart + j * (segmentWidth + segmentGap), y, segmentWidth, barHeight);
                     }
+
+                    const infoCardBarWidth = 24;
+                    const infoCardBarHeight = 3;
+                    const infoCardSegmentGap = 1;
+                    const infoCardSegmentWidth = (infoCardBarWidth - (maxHealth - 1) * infoCardSegmentGap) / maxHealth;
+                    const infoCardBarX = this.infoCardLetter.x - 15;
+                    const infoCardBarY = this.infoCardLetter.y - 18;
+                    if (this.infoCardHealthBar) {
+                        this.infoCardHealthBar.destroy();
+                    }
+            
+                    this.infoCardHealthBar = this.add.graphics();
+                    for (let j = 0; j < maxHealth; j++) {
+                        this.infoCardHealthBar.fillStyle(0x00ff00);
+                        this.infoCardHealthBar.fillRect(infoCardBarX + j * (infoCardSegmentWidth + infoCardSegmentGap), infoCardBarY, infoCardSegmentWidth, infoCardBarHeight);
+                    }
+                    // this.infoCardHealthBars[i] = infoCardHealthBar;
+
+
                     this.letterSlotHealthBars[i] = healthBar;
                     const tags = config.tags && config.tags.length ? `${config.tags.join(', ')}` : '';
                     this.infoCard.setVisible(true);
@@ -374,6 +420,10 @@ export class WordEntryScene extends Phaser.Scene {
                 this.letterSlotHealthBars[i].destroy();
                 this.letterSlotHealthBars[i] = null;
             }
+            if (this.infoCardHealthBar) {
+                this.infoCardHealthBar.destroy();
+            }
+    
             this.infoCard.setVisible(false);
             this.infoCardLetter.setVisible(false);
             this.lastLetterInfoText.setVisible(false);
@@ -491,7 +541,7 @@ export class WordEntryScene extends Phaser.Scene {
         if (word.length > 0) {
             const lastLetter = word[word.length - 1];
             const config = LETTER_CONFIG[lastLetter];
-            if (config) {
+            if (config) {               
                 const tags = config.tags && config.tags.length ? `${config.tags.join(', ')}` : '';
                 this.infoCard.setVisible(true);
                 this.infoCardLetter.setText(lastLetter.toUpperCase());

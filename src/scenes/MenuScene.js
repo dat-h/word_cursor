@@ -95,8 +95,18 @@ export class MenuScene extends Phaser.Scene {
 
         soundButton.on('pointerdown', () => {
             gameState.isMuted = !gameState.isMuted;
-            soundButton.setText(`Sound: ${gameState.isMuted ? 'OFF' : 'ON'}`);
             this.sound.mute = gameState.isMuted;
+            soundButton.setText(`Sound: ${gameState.isMuted ? 'OFF' : 'ON'}`);
+            saveGameState();
+        });
+
+        // Add battle speed toggle
+        const speedButton = this.add.bitmapText(width / 2, height / 2 + 150, 'nokia16', `Battle Speed: ${gameState.battleSpeed.toUpperCase()}`, 24)
+            .setOrigin(0.5)
+            .setInteractive();
+        speedButton.on('pointerdown', () => {
+            gameState.battleSpeed = gameState.battleSpeed === 'normal' ? 'fast' : 'normal';
+            speedButton.setText(`Battle Speed: ${gameState.battleSpeed.toUpperCase()}`);
             saveGameState();
         });
 

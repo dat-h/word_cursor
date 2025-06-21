@@ -75,6 +75,7 @@ export const gameState = {
     opponentAvailableLetters: ['r', 's', 't', 'l', 'n', 'e', 'o'],
     opponentPriorityLetters: [ 'o'],
     lastScene: 'MenuScene',
+    battleSpeed: 'normal', // 'normal' or 'fast'
 };
 
 export function saveGameState() {
@@ -89,6 +90,7 @@ export function saveGameState() {
             volumeLevel: gameState.volumeLevel,
             volume: gameState.volume,
             version: GAME_SAVE_VERSION,
+            battleSpeed: gameState.battleSpeed,
             // lastScene: gameState.lastScene,
         };
         localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(saveData));
@@ -104,6 +106,11 @@ export function loadGameState() {
         const saveData = JSON.parse(data);
         if (saveData.version !== GAME_SAVE_VERSION) return; // skip incompatible saves
         Object.assign(gameState, saveData);
+        
+        // Ensure battleSpeed has a valid value (for backward compatibility)
+        if (!gameState.battleSpeed || (gameState.battleSpeed !== 'normal' && gameState.battleSpeed !== 'fast')) {
+            gameState.battleSpeed = 'normal';
+        }
     } catch (e) {
         // ignore
     }
